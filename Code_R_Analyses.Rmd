@@ -1,0 +1,329 @@
+---
+title: "PROJET_POKEMON"
+output: pdf_document
+---
+
+##Chargement des packages et importation des données : 
+```{r}
+#install.packages(c("FactoMineR", "factoextra","missMDA","tidyverse","corrplot","gplots","graphics","questionr","ExPosition","cluster","fpc"))
+library(FactoMineR)
+library(factoextra)
+library(missMDA)
+library(tidyverse)
+library(corrplot)
+library(gplots)
+library(graphics)
+library(questionr)
+library(ExPosition)
+library(cluster)
+library(fpc)
+
+#setwd("C:/Users/rayan/Documents/Cours/M1/Clustering")
+#setwd("C:/Users/ccl13/Documents/Clustering - Projet")
+setwd("C:/Users/nlebr/Desktop/PROJET_CLUSTERING")
+data=read.csv("pokemon.csv",sep=";",header=T,row.names = "name")
+
+```
+
+Modification et transformation des données : 
+```{r}
+#gestion des valeurs manquantes
+data = data %>%
+  mutate(percentage_male=replace_na(percentage_male,0))
+
+#concaténation des variables type1 et type2
+data_type = data[,c(36,37)]
+data_type$type1 = as.factor(data_type$type1)
+data_type$type2 = as.factor(data_type$type2)
+
+type=c()
+for (i in 1:nrow(data_type)){
+  m1 = as.character(data_type$type1[i])
+  m2 = as.character(data_type$type2[i])
+  if (m2<m1){
+    res = paste(m2,m1," ")
+  }
+  else{
+    res = paste(m1,m2," ")
+  }
+  type=c(type,res)
+}
+
+data_pokemon = data.frame(data,type)
+
+#variables sup : abilities//base_total//capture_rate//classification//japanese_name//pokedex_number//type1//type2
+delete_var = c(1,23,24,25,30,32,36,37)
+data_pokemon = data_pokemon[,-delete_var]
+
+#transformation des types des variables
+data_pokemon$generation = as.factor(data_pokemon$generation)
+data_pokemon$is_legendary = as.factor(data_pokemon$is_legendary)
+data_pokemon$type = as.factor(data_pokemon$type)
+
+#summary(data_pokemon)
+```
+
+
+##ACP :
+
+Choix des variables
+```{r}
+test_supp = c(1:18,20,21,23,26)
+data_ACP = data_pokemon[,-test_supp]
+
+boxplot(data_ACP[,1:8],las = 2)
+res.pca = PCA(data_ACP, scale.unit=TRUE, quali.sup = 9:11, ncp = 5, graph = FALSE)
+```
+
+Choix du nombre d'axes
+```{r message=FALSE,warning=FALSE}
+eig.val = get_eigenvalue(res.pca) 
+fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 70))
+```
+
+Analyse des résultats des variables
+```{r message=FALSE,warning=FALSE}
+var = get_pca_var(res.pca)
+
+#axe1
+coord = var$coord[,1]
+contrib = var$contrib[,1]
+cos2 = var$cos2[,1]
+display_var_1 = cbind(coord,contrib,cos2)
+
+#axe2
+coord = var$coord[,2]
+contrib = var$contrib[,2]
+cos2 = var$cos2[,2]
+display_var_2 = cbind(coord,contrib,cos2)
+
+#corrplot(var$cos2, is.corr=FALSE,main="Cos2")
+#corrplot(var$contrib, is.corr=FALSE,main="Contribution")
+```
+
+
+Représentation graphique des variables sur les deux premiers axes factoriels
+```{r message=FALSE,warning=FALSE}
+fviz_pca_var(res.pca, col.var = "cos2", 
+            gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+            repel = TRUE)
+fviz_pca_var(res.pca, col.var = "contrib", 
+            gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+            repel = TRUE)
+```
+
+Analyse des résultats des individus
+```{r message=FALSE,warning=FALSE}
+ind = get_pca_ind(res.pca) 
+
+#axe1
+coord = ind$coord[,1]
+contrib = ind$contrib[,1]
+cos2 = ind$cos2[,1]
+display_ind_1 = cbind(coord,contrib,cos2)
+
+#axe2
+coord = ind$coord[,2]
+contrib = ind$contrib[,2]
+cos2 = ind$cos2[,2]
+display_ind_2 = cbind(coord,contrib,cos2)
+
+#fviz_contrib(res.pca, choice = "ind", axes = 1, top=10)
+#fviz_contrib(res.pca, choice = "ind", axes = 2, top=10)
+```
+
+
+```{r message=FALSE,warning=FALSE}
+fviz_pca_ind (res.pca, col.ind = "contrib",
+              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+              repel = TRUE)
+fviz_pca_ind (res.pca, col.ind = "cos2",
+              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+              repel = TRUE)
+
+```
+
+
+```{r}
+fviz_pca_biplot(res.pca,select.ind = list(cos2 = 0.75), col.ind = "contrib",
+              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+              title="Pays (les mieux représentés sur l'axe 1) coloriés selon leur contribution",
+              repel = TRUE)
+```
+
+
+##AFC :
+
+```{r}
+# attack // weight_kg
+data_AFC = data_pokemon[,c(19,30)]
+data_AFC$attackcl = cut(data_AFC$attack, c(5,55,70,90,120,185))
+data_AFC$weight_kgcl = cut(data_AFC$weight_kg, c(0,55,100,1000))
+
+levels(data_AFC$attackcl) = c("très faible","faible","moyen","fort","très fort")
+levels(data_AFC$weight_kgcl) = c("léger","normal","lourd")
+
+tab_AFC = table(data_AFC$attackcl,data_AFC$weight_kgcl)
+```
+
+```{r message=FALSE,warning=FALSE}
+#balloonplot(t (tab_AFC), main = "L'attaque et le poids ", xlab = "", ylab = "", label = FALSE, show.margins = FALSE)
+#mosaicplot(tab_AFC, shade = TRUE, main = "Le poids et l'attaque",las=2)
+```
+
+Les profils lignes :
+```{r message=FALSE,warning=FALSE}
+lprop(tab_AFC,digits=1)
+```
+Les profils colonnes :
+```{r}
+cprop(tab_AFC,digits=1) 
+```
+Indépendance des deux varriables :
+```{r message=FALSE,warning=FALSE}
+chisq = chisq.test(tab_AFC)  
+```
+
+Réalisation d'une AFC pour expliquer le lien entre les deux variables
+```{r message=FALSE,warning=FALSE}
+res_AFC = CA(tab_AFC, graph = FALSE)  #calcul de l'AFC
+```
+Choix du nombre d'axes
+```{r message=FALSE,warning=FALSE}
+eig.val = get_eigenvalue(res_AFC) 
+fviz_eig(res_AFC, addlabels = TRUE, ylim = c(0, 100))
+```
+
+Interprétation sémantique de l'axe 1 avec les profils lignes
+```{r message=FALSE,warning=FALSE}
+row=get_ca_row(res_AFC)
+
+coord = row$coord[,1]
+contrib = row$contrib[,1]
+cos2 = row$cos2[,1]
+display_1_lignes = cbind(coord,contrib,cos2)
+```
+
+La représentation graphique des profils lignes sur le 1e plan factoriel
+```{r message=FALSE,warning=FALSE}
+#selon le cosinus
+fviz_ca_row (res_AFC, col.row = "cos2",
+             title ="Profils lignes selon leur cosinus²",
+             gradient.cols = c ("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE)
+#selon la contribution
+fviz_ca_row(res_AFC, pointsize = "contrib", 
+            title="Profils lignes selon leur contribution",
+            repel = TRUE)
+```
+
+Interprétation sémantique de l'axe 1 avec les profils colonnes
+```{r message=FALSE,warning=FALSE}
+col = get_ca_col(res_AFC)
+
+coord = col$coord[,1]
+contrib = col$contrib[,1]
+cos2 = col$cos2[,1]
+display_1_colonnes = cbind(coord,contrib,cos2)
+```
+
+La représentation graphique des profils colonnes sur le 1e plan factoriel
+```{r message=FALSE,warning=FALSE}
+#selon le cosinus 
+fviz_ca_col(res_AFC, col.col = "cos2",
+             title ="Profils colonnes selon leur cosinus²",
+             gradient.cols = c ("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE)
+#selon la contribution 
+fviz_ca_col(res_AFC, pointsize = "contrib", 
+            title="Profils colonnes selon leur contribution",
+            repel = TRUE)
+
+```
+
+Représentation graphique simultanée des profils lignes et des profils colonnes
+```{r}
+fviz_ca_biplot (res_AFC, repel = TRUE)
+```
+
+
+##CAH : 
+
+Calcul et affichage du dendrogramme de la CAH : 
+
+```{r}
+data_Clustering = data_ACP[,-c(9:11)]
+data_C_cr = as.data.frame(scale(data_Clustering,center=T,scale = T))
+res_hcpc=HCPC(data_C_cr, method="ward", graph = FALSE, nb.clust = 4)
+fviz_dend(res_hcpc, show_labels = FALSE)
+typologie = res_hcpc$data.clus[,9]
+```
+
+Interprétation des différents groupes de la CAH :
+
+```{r}
+res_hcpc$desc.var 
+res_hcpc$desc.ind
+
+groupe_pokemon = data.frame(res_hcpc$data.clust$clust)
+rownames(groupe_pokemon) = rownames(data)
+```
+
+##K-means : 
+
+Silhouette K-means : 
+```{r}
+silhouette_score = function(k){
+  km = kmeans(data_C_cr, centers = k, nstart=25)
+  ss = silhouette(km$cluster, dist(data_C_cr))
+  mean(ss[, 3])
+}
+k = 2:10
+avg_sil = sapply(k, silhouette_score)
+plot(k, type='b', avg_sil, xlab='Nombre de classes', ylab='Scores de Silhouette', frame=FALSE)
+
+```
+
+K-means : 
+
+```{r}
+res.kmeans = kmeans(data_C_cr,centers=4,nstart=5)
+
+#ajout de la typologie aux données 
+typologie = res.kmeans$cluster
+data_C_cr = cbind(data_C_cr,typologie)
+
+centre_cl_kmeans = res.kmeans$centers
+distance_centre_classe = c()
+
+for (i in 1:nrow(data_C_cr)){
+  grp = data_C_cr[i,9]
+  dist_ctr = sum(data_C_cr[i,-9]-centre_cl_kmeans[grp,])^2
+  distance_centre_classe = c(distance_centre_classe,dist_ctr)
+}
+
+data_C_cr = cbind(data_C_cr,distance_centre_classe)
+
+data_cl1 = data_C_cr[data_C_cr$typologie==1,]
+data_cl2 = data_C_cr[data_C_cr$typologie==2,]
+data_cl3 = data_C_cr[data_C_cr$typologie==3,]
+data_cl4 = data_C_cr[data_C_cr$typologie==4,]
+
+```
+
+
+##Comparaison de la CAH avec les K-means :
+
+```{r}
+groupe_pokemon=cbind(groupe_pokemon,res.kmeans$cluster)
+colnames(groupe_pokemon) = c("CAH","K-means")
+tab_comp = table(groupe_pokemon)
+```
+
+
+
+
+
+
+
+
